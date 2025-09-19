@@ -101,53 +101,102 @@ class BaseScraper:
         if '-' in price_text:
             price_text = price_text.split('-')[0].strip()
         
-        # Handle the specific formatting issue where extra digits appear after valid price digits
-        # For example: "15,9997" should be "15,999" (remove extra "7" at the end)
-        # Or "207,00011" should be "207,000" (remove extra "11" at the end)
-        if ',' in price_text:
-            # Split by comma
-            parts = price_text.split(',')
-            
-            # If we have more than one part, check if the last part might be extra digits
-            if len(parts) > 1:
-                last_part = parts[-1]
-                # If the last part has more than 3 digits, it's likely extra digits
-                # In Nepalese format, the part after comma should be 2-3 digits for thousands
-                if len(last_part) > 3:
-                    # Check if removing the last few digits would make sense
-                    # For example, if we have "9997", the extra "7" should be removed
-                    # If we have "00011", the extra "11" should be removed
-                    
-                    # Simple approach: remove the last 1-2 digits if they look like extras
-                    if len(last_part) == 4:
-                        # "9997" -> "999"
-                        parts[-1] = last_part[:-1]
-                    elif len(last_part) == 5:
-                        # "00011" -> "000"
-                        parts[-1] = last_part[:-2]
-                    elif len(last_part) == 6:
-                        # "999137" -> "999"
-                        parts[-1] = last_part[:-3]
-            
-            # Reconstruct the price text
-            price_text = ','.join(parts)
-        # If there's no comma but the number is very long, it might also have extra digits
-        elif len(price_text) > 6:
-            # For very long numbers without commas, try to detect extra digits
-            # This is a heuristic - if the last few digits seem like extras, remove them
-            if len(price_text) >= 7 and len(price_text) <= 8:
-                # For 7-8 digit numbers, check if last 1-2 digits might be extras
-                # e.g., "1234567" might be "123456"
-                price_text = price_text[:-1]  # Remove last digit as a test
-        
-        # For Nepalese prices, commas are typically thousand separators
-        # Remove all commas
-        price_text = price_text.replace(',', '')
+        # Remove any non-numeric characters except commas, decimals, and digits
+        cleaned_text = re.sub(r'[^\d,.]', '', price_text)
         
         try:
-            return float(price_text)
+            # If we already have a decimal point, use it as-is
+            if '.' in cleaned_text:
+                standard_format = cleaned_text.replace(',', '')
+                price = float(standard_format)
+                if 100 <= price <= 500000:  # Reasonable range for electronics
+                    return price
+            
+            # Handle the specific formatting issue where extra digits appear without decimal points
+            # This is for cases like "188200" which should be "1882.00"
+            elif len(cleaned_text.replace(',', '')) >= 5:
+                # Remove commas to work with the digits
+                no_comma_text = cleaned_text.replace(',', '')
+                
+                # For prices with 5+ digits without decimal points, 
+                # the last 2 digits represent paise (cents)
+                if len(no_comma_text) >= 5:
+                    # Check if the original text had commas
+                    if ',' in cleaned_text:
+                        # Split by comma to understand the structure
+                        parts = cleaned_text.split(',')
+                        
+                        # For cases like "207,0009", the format is:
+                        # The comma is a thousands separator, and the last 2 digits are paise
+                        # So "207,0009" means 207,000.09
+                        # And "168,7006" means 168,700.06
+                        
+                        if len(parts) >= 2 and len(parts[-1]) > 3:
+                            # The last part has more than 3 digits, so the extra are paise
+                            last_part = parts[-1]
+                            paise_part = last_part[-2:]  # Last 2 digits are paise
+                            
+                            # Special handling for 4-digit last parts
+                            # The format assumes a 5-digit representation where the first 3 digits 
+                            # are the ones part and the last 2 are paise
+                            # So "7006" represents "07006" conceptually:
+                            # - First 3 digits "700" are the ones
+                            # - Last 2 digits "06" are the paise
+                            if len(last_part) == 4:
+                                # Treat as 5-digit format with implicit leading zero
+                                # First 3 digits for ones part
+                                rupee_digits = last_part[:3]  # First 3 digits
+                            else:
+                                # Standard case - all digits except last 2
+                                rupee_digits = last_part[:-2]
+                            
+                            # Reconstruct the full rupee amount
+                            # parts[:-1] gives us ['207'] for "207,0009"
+                            # rupee_digits gives us "000" for "207,0009"
+                            # So we join them to get "207000"
+                            rupee_part = ''.join(parts[:-1] + [rupee_digits])
+                            
+                            # Combine with decimal point
+                            if rupee_part and paise_part:
+                                candidate_price = float(rupee_part + '.' + paise_part)
+                                if 100 <= candidate_price <= 500000:
+                                    return candidate_price
+                        else:
+                            # Standard format with comma as thousand separator
+                            standard_format = cleaned_text.replace(',', '')
+                            price = float(standard_format)
+                            if 100 <= price <= 500000:
+                                return price
+                    else:
+                        # No commas, just split the last 2 digits as paise
+                        # Extract the last 2 digits as paise
+                        paise_part = no_comma_text[-2:]
+                        main_part = no_comma_text[:-2]
+                        
+                        # Combine with decimal point
+                        if main_part and paise_part:
+                            candidate_price = float(main_part + '.' + paise_part)
+                            
+                            # Validate the price is in reasonable range
+                            if 100 <= candidate_price <= 500000:
+                                return candidate_price
+                            else:
+                                # If not in range, try treating as a regular number
+                                price = float(no_comma_text)
+                                if 100 <= price <= 500000:
+                                    return price
+            
+            # If we have a simple number without decimal, try it as-is
+            standard_format = cleaned_text.replace(',', '')
+            if '.' not in standard_format and len(standard_format) >= 3:
+                price = float(standard_format)
+                if 100 <= price <= 500000:  # Reasonable range for electronics
+                    return price
+                    
         except ValueError:
-            return 0.0
+            pass
+        
+        return 0.0
     
     def _safe_extract(self, soup, selector: str, attribute: str = None) -> str:
         """Safely extract text or attribute from BeautifulSoup element"""

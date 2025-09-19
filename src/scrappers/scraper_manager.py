@@ -13,10 +13,19 @@ from database.init_db import get_session, init_db
 
 class ScraperManager:
     def __init__(self):
-        self.scrapers = {
-            'Daraz': DarazScraper()
+        self._scrapers = {}
+        self._scraper_classes = {
+            'Daraz': DarazScraper
         }
         self.engine = init_db()
+    
+    @property
+    def scrapers(self):
+        """Lazy initialization of scrapers"""
+        if not self._scrapers:
+            for name, scraper_class in self._scraper_classes.items():
+                self._scrapers[name] = scraper_class()
+        return self._scrapers
     
     def search_all_sites(self, query: str) -> List[Dict]:
         """Search for products across all sites"""

@@ -20,7 +20,7 @@ def main():
         uvicorn.run("src.api.main:app", host="127.0.0.1", port=8000, reload=True)
     else:
         # Run CLI
-        from cli import main as cli_main
+        from src.cli import main as cli_main
         cli_main()
 
 if __name__ == "__main__":

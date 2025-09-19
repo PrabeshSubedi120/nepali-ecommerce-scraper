@@ -1,12 +1,13 @@
 import argparse
 import sys
 import os
+import time
 
 # Add the parent directory to the path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scrappers.scraper_manager import ScraperManager
-from utils.data_processor import generate_price_comparison_report, format_price
+from src.scrappers.scraper_manager import ScraperManager
+from src.utils.data_processor import generate_price_comparison_report, format_price
 import pandas as pd
 
 def search_command(args):
@@ -80,27 +81,49 @@ def interactive_mode():
         print("Electronics Price Tracker - Interactive Mode")
         print("=" * 50)
         print("Enter 'quit' to exit")
+        print()
         
         while True:
-            query = input("\nEnter product to search: ")
-            if query.lower() == 'quit':
+            try:
+                # Get user input with a clear prompt
+                print("\nEnter product to search: ", end='', flush=True)
+                query = input().strip()
+                
+                if query.lower() == 'quit':
+                    print("Goodbye!")
+                    break
+                    
+                if not query:
+                    print("Please enter a valid product name.")
+                    continue
+                
+                print(f"Searching for '{query}'...")
+                df = scraper_manager.compare_products(query)
+                
+                if df.empty:
+                    print("No products found!")
+                    continue
+                
+                # Show best deals
+                print(f"\nBest deals for '{query}':")
+                print("=" * 40)
+                df_sorted = df.sort_values('price').head(5)
+                
+                for idx, (_, product) in enumerate(df_sorted.iterrows()):
+                    print(f"{idx+1}. {product['name'][:60]}...")
+                    print(f"   {format_price(product['price'])} | {product['site']}")
+                    print()
+                    
+            except KeyboardInterrupt:
+                print("\n\nExiting...")
                 break
-            
-            df = scraper_manager.compare_products(query)
-            
-            if df.empty:
-                print("No products found!")
+            except EOFError:
+                print("\n\nExiting...")
+                break
+            except Exception as e:
+                print(f"Error searching for products: {e}")
                 continue
-            
-            # Show best deals
-            print(f"\nBest deals for '{query}':")
-            print("=" * 40)
-            df_sorted = df.sort_values('price').head(5)
-            
-            for idx, (_, product) in enumerate(df_sorted.iterrows()):
-                print(f"{idx+1}. {product['name'][:60]}...")
-                print(f"   {format_price(product['price'])} | {product['site']}")
-                print()
+                
     except Exception as e:
         print(f"Error in interactive mode: {e}")
     finally:

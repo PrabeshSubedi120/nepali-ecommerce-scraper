@@ -75,11 +75,12 @@ class DarazScraper(BaseScraper):
                 # Extract price with better precision
                 price = 0.0
                 
-                # Look for price with specific selectors first
+                # Look for price with specific selectors first (in order of preference)
                 price_selectors = [
-                    '.price', 
+                    '.c-product-card__price',  # Most specific Daraz selector
                     '.product-price', 
-                    '.c-product-card__price',
+                    '.price.sale',  # Sale price if available
+                    '.price',
                     '[data-price]',
                     '.origin-price'
                 ]
@@ -90,8 +91,6 @@ class DarazScraper(BaseScraper):
                     if price_text and ('Rs' in price_text or 'NPR' in price_text):
                         price = self._parse_price(price_text)
                         if price > 0:
-                            # Debug: Show what we extracted
-                            print(f"DEBUG: Extracted price '{price_text}' -> {price:,.2f}")
                             break
                 
                 # If no price found with selectors, look in the text content
@@ -99,7 +98,7 @@ class DarazScraper(BaseScraper):
                     item_text = item.get_text()
                     # Look for price patterns
                     price_patterns = [
-                        r'Rs\.\s*[\d,]+\.?\d*',
+                        r'Rs\.\s*[\d,]+\.?\d*',  # Most specific pattern first
                         r'Rs\s*[\d,]+\.?\d*',
                         r'NPR\s*[\d,]+\.?\d*'
                     ]
@@ -111,8 +110,6 @@ class DarazScraper(BaseScraper):
                             for match in matches:
                                 price = self._parse_price(match)
                                 if price > 0:
-                                    # Debug: Show what we extracted
-                                    print(f"DEBUG: Pattern match '{match}' -> {price:,.2f}")
                                     break
                             if price > 0:
                                 break
