@@ -147,7 +147,7 @@ with st.sidebar:
     """)
     
     st.markdown("---")
-    st.markdown("Made with ❤️ for Nepalese consumers")
+    st.markdown("Made with ❤️ by Prabesh Subedi")
 
 # Main content
 if st.session_state.search_results is not None and not st.session_state.search_results.empty:
